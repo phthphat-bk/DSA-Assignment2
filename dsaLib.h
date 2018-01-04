@@ -45,7 +45,7 @@ class L1List {
     size_t      _size;// number of elements in this list
 public:
     L1List() : _pHead(NULL), _size(0) {}
-    ~L1List();
+    //~L1List();
 
     void    clean();
     bool    isEmpty() {
@@ -89,6 +89,16 @@ public:
     }
 };
 
+template<class T>
+T& L1List<T>::operator[](int i){
+    L1Item<T> *p = _pHead;
+    if (i <= _size && i >= 0) {
+        for (int index = 0; index < i; index++) {
+            p = p->pNext;
+        }
+        return p->data;
+    }
+}
 /// Insert item to the end of the list
 /// Return 0 if success
 template <class T>
@@ -159,34 +169,38 @@ int L1List<T>::removeLast() {
 /************************************************************************
  * This section is for AVL tree
  ************************************************************************/
+int max(int a, int b){
+    return a>b?a:b;
+}
+enum banlance{ L = -1, E = 0, R = 1};
 template <class T>
 struct AVLNode {
     T           _data;
-    AVLNode<T>   *_pLeft, *_pRight;
-#ifdef AVL_USE_HEIGHT
+    AVLNode<T>   *_left, *_right;
+// #ifdef AVL_USE_HEIGHT
     int         _height;
-    AVLNode(T &a) : _data(a), _pLeft(NULL), _pRight(NULL), _height(1) {}
-#else
+//     AVLNode(T &a) : _data(a), _left(NULL), _right(NULL), _height(1) {}
+// #else
     int         _bFactor;
-    AVLNode(T &a) : _data(a), _pLeft(NULL), _pRight(NULL), _bFactor(0) {}
-#endif
+    AVLNode(T &a) : _data(a), _left(NULL), _right(NULL), _bFactor(0), _height(1) {}
 };
 
 template <class T>
 class AVLTree {
-    AVLNode<T> *_pRoot;
+    AVLNode<T> *_root;
 public:
-    AVLTree() : _pRoot(NULL) {}
-    ~AVLTree() { destroy(_pRoot); }
+    AVLTree() : _root(NULL) {}
+    ~AVLTree() { destroy(_root); }
 
-    bool find(T& key, T* &ret) { return find(_pRoot, key, ret); }
-    bool insert(T& key) { return insert(_pRoot, key); }
-    bool remove(T& key) { return remove(_pRoot, key); }
-    void traverseNLR(void (*op)(T&)) { traverseNLR(_pRoot, op); }
-    void traverseLNR(void (*op)(T&)) { traverseLNR(_pRoot, op); }
-    void traverseLRN(void (*op)(T&)) { traverseLRN(_pRoot, op); }
+    bool find(T& key, T* &ret) { return find(_root, key, ret); }
+    bool insert(T& key) { return insert(_root, key); }
+    bool remove(T& key) { return remove(_root, key); }
+    void traverseNLR(void (*op)(T&)) { traverseNLR(_root, op); }
+    void traverseLNR(void (*op)(T&)) { traverseLNR(_root, op); }
+    void traverseLRN(void (*op)(T&)) { traverseLRN(_root, op); }
 
 protected:
+    AVLNode<T> *findMin(AVLNode<T> *pR);
     void destroy(AVLNode<T>* &pR);
     bool find(AVLNode<T> *pR, T& key, T* &ret);
     bool insert(AVLNode<T>* &pR, T& a);
@@ -195,6 +209,7 @@ protected:
     void traverseLNR(AVLNode<T> *pR, void (*op)(T&));
     void traverseLRN(AVLNode<T> *pR, void (*op)(T&));
 
+    int getBalance(AVLNode<T> *pR);
     void rotLeft(AVLNode<T>* &pR);
     void rotRight(AVLNode<T>* &pR);
     void rotLR(AVLNode<T>* &pR);
@@ -203,5 +218,106 @@ protected:
     bool balanceLeft(AVLNode<T>* &pR);
     bool balanceRight(AVLNode<T>* &pR);
 };
+template<class T>
+int AVLTree<T>::getBalance(AVLNode<T> *pR){
+    return pR->_left->_height - pR->_right->_height;
+}
+template<class T>
+void AVLTree<T>::rotLeft(AVLNode<T> *&pR){
+    if(!pR) return;
+    AVLNode<T> *temp = pR;
+    pR = pR->_right;
+    temp->_right = pR->_left;
+    pR->_left = temp;
 
+    temp->_height = 1+max(temp->_left->_height, temp->_right->_height);    
+    pR->_height = 1+max(pR->_left->_height, pR->_right->_height);
+}
+template<class T>
+void AVLTree<T>::rotRight(AVLNode<T> *&pR){
+    if(!pR) return;
+    AVLNode<T> *temp = pR;
+    pR = pR->_left;
+    temp->_left = pR->_right;
+    pR->_right = temp;
+
+    temp->_height = 1+max(temp->_left->_height, temp->_right->_height);
+    pR->_height = 1+max(pR->_left->_height, pR->_right->_height);
+}
+template<class T>
+bool AVLTree<T>::insert(AVLNode<T>* &pR, T& a){
+    if (!pR) pR = new AVLNode<T>(a);
+    if(a < pR->_data)
+        insert(pR->_left, a);
+    else if (a > pR->_data) {
+        insert(pR->_right, a);
+    }
+    else return true;
+    pR->_height = 1+max(pR->_left->_height, pR->_right->_height);
+    int balance = getBalance(pR);
+    if(balance > 1 && a < pR->_left->_data){ //L-L
+        rotRight(pR);
+    }
+    if(balance < -1 && a > pR->_right->_data){ //R-R
+        rotLeft(pR);
+    }
+    if(balance > 1 && a > pR->_left->data){ //L-R
+        rotLeft(pR->_left);
+        rotRight(pR);
+    }
+    if(balance < -1 && a < pR->_right->_data){ //R-L
+        rotRight(pR->_right);
+        rotLeft(pR);
+    }
+    return true;
+}
+template<class T>
+bool AVLTree<T>::remove(AVLNode<T>* &pR, T& a){
+    if(!pR) return false;
+    if(a < pR->_data){
+        remove(pR->_left, a);
+    }
+    else if (a > pR->_data) {
+        remove(pR->_right, a);
+    }
+    else {
+        if(!pR->_left || !pR->_right){
+            AVLNode<T> *temp = pR->_left ? pR->_left : pR->_right;
+            if(!temp){
+                temp = pR;
+                pR = NULL;
+            }
+            else
+                *pR = *temp;
+            delete temp;
+        }
+        else {
+            //2 children
+            AVLNode<T> *temp = findMin(pR->_right);
+            pR->_data = temp->_data;
+            remove(pR, temp->_data);
+        }
+    }
+    //if(!pR) return false;
+    pR->_height = 1+max(pR->_left->_height - pR->_right->_height);
+    int balance = getBalance(pR);
+    if(balance > 1 && getBalance(pR->_left) >= 0){
+        rotRight(pR);
+        return true;
+    }
+    if(balance < -1 && getBalance(pR->_right) <= 0){
+        rotLeft(pR);
+        return true;
+    }
+    if(balance > 1 && getBalance(pR->_left) < 0){
+        rotLeft(pR->_left);
+        rotRight(pR);
+        return true;
+    }
+    if(balance < -1 && getBalance(pR->_right)>0){
+        rotRight(pR->_right);
+        rotLeft(pR);
+        return true;
+    }
+}
 #endif //A02_DSALIB_H
